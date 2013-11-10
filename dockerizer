@@ -9,8 +9,12 @@ class Dockerizer
     create_working_dir do
       parse_arguments
       setup_source
-      import_app
-      build_app
+      begin
+        import_app
+        build_app
+      ensure
+        cleanup_source
+      end
     end
   rescue Interrupt
     exit 1
@@ -58,8 +62,9 @@ private
 
     command = "docker run -t -i " +
       "-v #{e_working_dir}:/input " +
-      "-cidfile #{e_cidfile} " +
-      "phusion/dockerizer chpst -u app /bin/bash -c '" +
+      "-cidfile #{e_cidfile} "
+    command << "-e DOCKERIZER_DEBUG=1 " if debug?
+    command << "phusion/dockerizer /bin/bash -c '" +
         "mkdir -p /app && " +
         "chown app:app /app && " +
         "/sbin/setuser app tar -x -z -C /app < /input/source" +
@@ -68,16 +73,26 @@ private
 
     container_id = read_text_file(cidfile).strip
     debug("Container ID is #{container_id}")
+    sh("rm -f #{e_cidfile}")
     sh("docker commit #{container_id} #{@name} #{@tag} >/dev/null")
   end
 
   def build_app
-    Dir.mktmpdir("dockerizer") do |path|
-      cidfile = "#{path}/cid.txt"
-      sh("docker", "run", "-cidfile", cidfile, image_name, "/build/builder")
-      container_id = read_text_file(cidfile).strip
-      sh("docker commit #{container_id} #{@name} #{@tag} >/dev/null")
-    end
+    cidfile = "#{@working_dir}/id.txt"
+    e_cidfile = Shellwords.escape(cidfile)
+
+    command = "docker run -cidfile #{e_cidfile} "
+    command << "-e DOCKERIZER_DEBUG=1 " if debug?
+    command << Shellwords.escape(image_name) + " /build/builder"
+    sh(command)
+
+    container_id = read_text_file(cidfile).strip
+    sh("docker commit #{container_id} #{@name} #{@tag} >/dev/null")
+  end
+
+  def cleanup_source
+    Process.kill('TERM', @source_pid)
+    Process.waitpid(@source_pid)
   end
 
   def create_buffer
