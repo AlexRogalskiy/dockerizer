@@ -1,5 +1,6 @@
+.PHONY: all build
 
 all: build
 
 build: 
-	docker build -t progrium/buildstep .
+	docker build -t phusion/dockerizer -rm .

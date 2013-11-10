@@ -1,5 +1,5 @@
-FROM ubuntu:quantal
-MAINTAINER progrium "progrium@gmail.com"
+FROM phusion/passenger:1.0
+MAINTAINER Phusion <info@phusion.nl>
 
 RUN mkdir /build
 ADD ./stack/ /build
