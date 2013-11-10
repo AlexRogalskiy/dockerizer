@@ -86,4 +86,4 @@ chmod +x /start
 
 rm -rf $app_root
 mv $build_root $app_root
-chown -R app:app $build_root
+chown -R app:app $app_root
