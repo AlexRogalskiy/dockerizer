@@ -2,6 +2,7 @@
 #
 # Prepares the "stack" to run apps and the environment to run buildpacks
 #
+set -e
 
 #
 # SYSTEM PACKAGES
@@ -16,6 +17,14 @@ apt-get clean
 mkdir -p /build/buildpacks
 cd /build/buildpacks
 xargs -L 1 git clone --depth=1 < /build/buildpacks.txt
+
+# The Heroku buildpacks have a too low timeout for downloading
+# large (> 100 MB) binary files, causing them to fail on dev
+# machines where the Internet connection isn't so fast.
+# We patch the timeouts to 10 minutes.
+grep -l -r -F -- '--max-time' /build/buildpacks |
+	sort -u |
+	xargs sed -i -E 's/ --max-time [0-9]+ / --max-time 600 /g'
 
 #
 # MISC
