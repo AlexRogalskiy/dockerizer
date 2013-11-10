@@ -1,16 +1,16 @@
 #!/bin/bash
 set -e
+if [[ "$DOCKERIZER_DEBUG" = 1 ]]; then
+  set -x
+fi
 
 app_root=/app
 build_root=/build/app
 cache_root=/cache
 buildpack_root=/build/buildpacks
 
-if [[ -e "$app_root/config.ru" && ! -e "$app_root/Procfile" ]]; then
-  echo 'web: passenger start -p $PORT --max-pool-size 2' > "$app_root/Procfile"
-fi
-
-cp -r /app /build
+rm -rf $build_root
+cp -dpR app_root $build_root
 
 buildpacks=($buildpack_root/*)
 selected_buildpack=
@@ -47,7 +47,7 @@ export REQUEST_ID=$(openssl rand -base64 32)
 $selected_buildpack/bin/compile "$build_root" "$cache_root"
 
 echo "-----> Discovering process types"
-$selected_buildpack/bin/release "$build_root" "$cache_root" > /build/app/.release
+$selected_buildpack/bin/release "$build_root" "$cache_root" > "$build_root/.release"
 
 if [[ -f "$build_root/Procfile" ]]; then
   types=$(ruby -e "require 'yaml';puts YAML.load_file('$build_root/Procfile').keys().join(', ')")
@@ -84,5 +84,6 @@ fi
 EOF
 chmod +x /start
 
-rm -fR /app
-mv /build/app /
+rm -rf $app_root
+mv $build_root $app_root
+chown -R app:app $build_root

@@ -59,13 +59,12 @@ private
     command = "docker run -t -i " +
       "-v #{e_working_dir}:/input " +
       "-cidfile #{e_cidfile} " +
-      "phusion/dockerizer /bin/bash -c 'mkdir -p /app && tar -x -z -C /app < /input/source'"
-
+      "phusion/dockerizer chpst -u app /bin/bash -c '" +
+        "mkdir -p /app && " +
+        "chown app:app /app && " +
+        "/sbin/setuser app tar -x -z -C /app < /input/source" +
+      "'"
     sh(command)
-
-    if $?.exitstatus != 0
-      abort "*** Command failed: #{import_command}"
-    end
 
     container_id = read_text_file(cidfile).strip
     debug("Container ID is #{container_id}")
@@ -77,7 +76,7 @@ private
       cidfile = "#{path}/cid.txt"
       sh("docker", "run", "-cidfile", cidfile, image_name, "/build/builder")
       container_id = read_text_file(cidfile).strip
-      sh("docker", "commit", container_id, @name, @tag)
+      sh("docker commit #{container_id} #{@name} #{@tag} >/dev/null")
     end
   end
 
@@ -87,27 +86,11 @@ private
     buf
   end
 
-  def import_command
-    "docker run -i -a stdin phusion/dockerizer /bin/bash -c 'mkdir -p /app && tar -xC /app'"
-  end
-
   def image_name
     if @tag
       "#{@name}:#{@tag}"
     else
       @name
-    end
-  end
-
-  def pump_io(source, target)
-    buf = create_buffer
-    while true
-      begin
-        source.readpartial(1024, buf)
-        target.write(buf)
-      rescue EOFError
-        break
-      end
     end
   end
 
