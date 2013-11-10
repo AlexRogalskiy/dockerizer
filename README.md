@@ -37,7 +37,7 @@ Running the buildstep script will take an application tar via STDIN and an appli
 an argument. It will put the application in a new container based on `progrium/buildstep` with the specified name. 
 Then it runs the builder script inside the container. 
 
-    $ cat myapp.tar | ./buildstep myapp
+    $ ./buildstep myapp < myapp.tar.gz
 
 The resulting container has a built app ready to go. The builder script also parses the Procfile and produces
 a starter script that takes a process type. Run your app with:

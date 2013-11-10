@@ -6,6 +6,10 @@ build_root=/build/app
 cache_root=/cache
 buildpack_root=/build/buildpacks
 
+if [[ -e "$app_root/config.ru" && ! -e "$app_root/Procfile" ]]; then
+  echo 'web: passenger start -p $PORT --max-pool-size 2' > "$app_root/Procfile"
+fi
+
 cp -r /app /build
 
 buildpacks=($buildpack_root/*)
@@ -67,6 +71,7 @@ chmod +x /exec
 
 cat > /start <<EOF
 #!/bin/bash
+set -e
 export HOME=/app
 for file in $app_root/.profile.d/*; do source \$file; done
 hash -r

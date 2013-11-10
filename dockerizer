@@ -1,0 +1,149 @@
+#!/usr/bin/env ruby
+# encoding: utf-8
+
+require 'shellwords'
+require 'tmpdir'
+
+class Dockerizer
+  def start
+    create_working_dir do
+      parse_arguments
+      setup_source
+      import_app
+      build_app
+    end
+  rescue Interrupt
+    exit 1
+  end
+
+private
+  def create_working_dir
+    Dir.mktmpdir("dockerizer-") do |path|
+      @working_dir = path
+      yield
+    end
+  end
+
+  def parse_arguments
+    @name   = ARGV[0]
+    @source = ARGV[1]
+    if !@name
+      STDERR.puts "Usage: dockerizer <NAME> [SOURCE]"
+      STDERR.puts "SOURCE may be a tar.gz file, a directory, or '-' for stdin. If not given, stdin is assumed."
+      exit 1
+    end
+  end
+
+  def setup_source
+    @source_pipe = "#{@working_dir}/source"
+    e_source_pipe = Shellwords.escape(@source_pipe)
+    e_source = Shellwords.escape(@source)
+
+    sh("mkfifo", @source_pipe)
+
+    if @source.nil? || @source == "-"
+      STDIN.binmode
+      @source_pid = spawn("cat > #{e_source_pipe}")
+    elsif File.directory?(@source)
+      @source_pid = spawn("tar -C #{e_source} -cz . > #{e_source_pipe}")
+    else
+      @source_pid = spawn("cat #{e_source} > #{e_source_pipe}")
+    end
+  end
+
+  def import_app
+    cidfile   = "#{@working_dir}/id.txt"
+    e_cidfile = Shellwords.escape(cidfile)
+    e_working_dir = Shellwords.escape(@working_dir)
+
+    command = "docker run -t -i " +
+      "-v #{e_working_dir}:/input " +
+      "-cidfile #{e_cidfile} " +
+      "phusion/dockerizer /bin/bash -c 'mkdir -p /app && tar -x -z -C /app < /input/source'"
+
+    sh(command)
+
+    if $?.exitstatus != 0
+      abort "*** Command failed: #{import_command}"
+    end
+
+    container_id = read_text_file(cidfile).strip
+    debug("Container ID is #{container_id}")
+    sh("docker commit #{container_id} #{@name} #{@tag} >/dev/null")
+  end
+
+  def build_app
+    Dir.mktmpdir("dockerizer") do |path|
+      cidfile = "#{path}/cid.txt"
+      sh("docker", "run", "-cidfile", cidfile, image_name, "/build/builder")
+      container_id = read_text_file(cidfile).strip
+      sh("docker", "commit", container_id, @name, @tag)
+    end
+  end
+
+  def create_buffer
+    buf = ""
+    buf.force_encoding("binary") if buf.respond_to?(:force_encoding)
+    buf
+  end
+
+  def import_command
+    "docker run -i -a stdin phusion/dockerizer /bin/bash -c 'mkdir -p /app && tar -xC /app'"
+  end
+
+  def image_name
+    if @tag
+      "#{@name}:#{@tag}"
+    else
+      @name
+    end
+  end
+
+  def pump_io(source, target)
+    buf = create_buffer
+    while true
+      begin
+        source.readpartial(1024, buf)
+        target.write(buf)
+      rescue EOFError
+        break
+      end
+    end
+  end
+
+  def read_text_file(path)
+    File.open(path, "r:utf-8") do |f|
+      f.read
+    end
+  end
+
+  def spawn(command)
+    debug(command)
+    if Process.respond_to?(:spawn)
+      Process.spawn(command)
+    else
+      fork do
+        exec(command)
+      end
+    end
+  end
+
+  def sh(*command)
+    command = command.compact
+    command_string = command.join(" ")
+    debug(command_string)
+    if !system(*command)
+      abort "*** Command failed: #{command_string}"
+    end
+  end
+
+  def debug(str)
+    puts("# #{str}") if debug?
+  end
+
+  def debug?
+    ENV['DOCKERIZER_DEBUG'] == '1'
+  end
+end
+
+Dockerizer.new.start
