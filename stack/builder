@@ -5,9 +5,9 @@ if [[ "$DOCKERIZER_DEBUG" = 1 ]]; then
 fi
 
 app_root=/app
-build_root=/build/app
+build_root=/build2/app
 cache_root=/cache
-buildpack_root=/build/buildpacks
+buildpack_root=/build2/buildpacks
 
 rm -rf $build_root
 cp -dpR $app_root $build_root

@@ -4,25 +4,27 @@
 #
 set -e
 
+root=/build2
+
 #
 # SYSTEM PACKAGES
 #
 apt-get update
-xargs apt-get install -y --force-yes < /build/packages.txt
+xargs apt-get install -y --force-yes < $root/packages.txt
 apt-get clean
 
 #
 # SUPPORTED BUILDPACKS
 #
-mkdir -p /build/buildpacks
-cd /build/buildpacks
-xargs -L 1 git clone --depth=1 < /build/buildpacks.txt
+mkdir -p $root/buildpacks
+cd $root/buildpacks
+xargs -L 1 git clone --depth=1 < $root/buildpacks.txt
 
 # The Heroku buildpacks have a too low timeout for downloading
 # large (> 100 MB) binary files, causing them to fail on dev
 # machines where the Internet connection isn't so fast.
 # We patch the timeouts to 10 minutes.
-grep -l -r -F -- '--max-time' /build/buildpacks |
+grep -l -r -F -- '--max-time' $root/buildpacks |
 	sort -u |
 	xargs sed -i -E 's/ --max-time [0-9]+ / --max-time 600 /g'
 
@@ -32,4 +34,4 @@ grep -l -r -F -- '--max-time' /build/buildpacks |
 
 # Ruby buildpack system configuration
 ruby-switch --set ruby1.9.1
-cd /build/buildpacks/heroku-buildpack-ruby && bundle install
+cd $root/buildpacks/heroku-buildpack-ruby && bundle install
